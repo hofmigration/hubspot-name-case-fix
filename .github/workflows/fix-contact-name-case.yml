@@ -1,0 +1,48 @@
+name: Fix Contact Name Case
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # every 4 hours, UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run? (true = log changes, no writes)'
+        required: false
+        type: choice
+        default: 'false'
+        options:
+          - 'true'
+          - 'false'
+
+concurrency:
+  group: contact-name-case
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install @hubspot/api-client
+
+      - run: node fix-contact-name-case.js
+        env:
+          HUBSPOT_TOKEN:     ${{ secrets.HUBSPOT_TOKEN }}
+          HUBSPOT_PORTAL_ID: ${{ secrets.HUBSPOT_PORTAL_ID }}
+          DRY_RUN:           ${{ inputs.dry_run || 'false' }}
+
+      - name: Commit updated state file
+        if: always() && inputs.dry_run != 'true'
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name  "GitHub Actions"
+          git add state.json || true
+          git diff --staged --quiet || git commit -m "Update state.json [skip ci]"
+          git push || true
